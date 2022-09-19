@@ -1,10 +1,5 @@
 package main
 
-import (
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"strconv"
-)
-
 type User struct {
 	ChatID   int64
 	Username string
@@ -12,14 +7,14 @@ type User struct {
 
 type Task struct {
 	ID       int
-	name     string
-	creator  User
-	assignee User
+	Name     string
+	Creator  User
+	Assignee User
 }
 
 type TaskStorage struct {
-	storage []Task
-	count   int
+	Storage []Task
+	Count   int
 }
 
 func CreateTaskCollection() *TaskStorage {
@@ -29,39 +24,49 @@ func CreateTaskCollection() *TaskStorage {
 	}
 }
 
-func (t *TaskStorage) AddTask(update tgbotapi.Update) string {
-	newTask := Task{
-		ID:      t.count,
-		creator: User{ChatID: update.Message.Chat.ID, Username: update.Message.From.UserName},
-	}
-
-	t.count++
-	t.storage = append(t.storage, newTask)
-	return strconv.Itoa(newTask.ID) + ". " + newTask.name + " by @" + newTask.creator.Username
+func (st *TaskStorage) AddTask(newTask *Task) {
+	newTask.ID = st.Count
+	st.Count++
+	st.Storage = append(st.Storage, *newTask)
 }
 
-func (t *TaskStorage) DeleteTask(index int) {
-	copy(t.storage[index:], t.storage[index+1:])
-	t.storage[len(t.storage)-1] = Task{}
-	t.storage = t.storage[:len(t.storage)-1]
-}
-
-func (t *TaskStorage) ModifyTask(update tgbotapi.Update) {
-
-}
-
-func (t *TaskStorage) Show(update tgbotapi.Update, assignee User, creator User) string {
-	var res string
-	for i, task := range t.storage {
-		res += strconv.Itoa(task.ID) + ". " + task.name + " by @" + task.creator.Username
-
-		if i != len(t.storage)-1 {
-			res += "\n"
+func (st *TaskStorage) DeleteTask(id int, user User) Task {
+	for i := range st.Storage {
+		if st.Storage[i].ID == id {
+			if user == st.Storage[i].Creator || user == st.Storage[i].Assignee {
+				task := st.Storage[i]
+				copy(st.Storage[i:], st.Storage[i+1:])
+				st.Storage[len(st.Storage)-1] = Task{}
+				st.Storage = st.Storage[:len(st.Storage)-1]
+				return task
+			}
 		}
 	}
+	return Task{}
 
-	if res == "" {
-		res = "Нет задач"
+}
+
+func (st *TaskStorage) ModifyTask(Id int, newAssign User, oldAssign User) Task {
+	for i := range st.Storage {
+		if st.Storage[i].ID == Id {
+			if oldAssign.Username == "" {
+				st.Storage[i].Assignee = newAssign
+				return st.Storage[i]
+			} else if oldAssign == st.Storage[i].Assignee {
+				st.Storage[i].Assignee = User{}
+				return st.Storage[i]
+			}
+		}
+	}
+	return Task{}
+}
+
+func (st *TaskStorage) Get(assignee string, creator string) []Task {
+	res := make([]Task, 0)
+	for _, task := range st.Storage {
+		if (assignee == "" && creator == "") || (assignee == task.Assignee.Username && creator == "") || (creator == task.Creator.Username && assignee == "") {
+			res = append(res, task)
+		}
 	}
 
 	return res

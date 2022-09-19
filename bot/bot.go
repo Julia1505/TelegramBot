@@ -12,7 +12,7 @@ import (
 var (
 	BotToken = "5130893085:AAFxPRK32MNUj8A1pBbvTuJMN1kYLOc5ZkM"
 
-	WebhookURL = "https://c445-188-255-34-137.eu.ngrok.io"
+	WebhookURL = "https://6462-188-255-34-137.eu.ngrok.io"
 )
 
 type TelegramBot struct {
