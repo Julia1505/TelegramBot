@@ -11,33 +11,42 @@ import (
 )
 
 type Answer struct {
-	Tasks       []Task
-	CurrentUser User
+	Task
+	User
 }
 
 var helloMessage = `Приветики-пистолетики, я бот Apopope ;) 
 Вот что я умею:
 /tasks - вывод всех задач
 /new задача - создание новой задачи
-(в разработке)/assign_$ID - делает пользователя исполнителем задачи
-(в разработке)/unassign_$ID - снимает задачу с текущего исполнителя
-(в разработке)/resolve_$ID - выполняет задачу
+/assign_$ID - делает пользователя исполнителем задачи
+/unassign_$ID - снимает задачу с текущего исполнителя
+/resolve_$ID - выполняет задачу
 /my - показывает задачи, которые назначены на меня
 /owner - показывает задачи, которые были созданы мной`
 
 var LIST = `{{if .}}
+{{range .}}{{.Task.ID}}. {{.Task.Name}} by @{{.Task.Creator.Username}}{{if .Task.Assignee.Username}}
+assignee: {{if (eq .User.Username .Task.Assignee.Username)}}я
+/unassign_{{.Task.ID}} /resolve_{{.Task.ID}}{{else}}@{{.Assignee.Username}}{{end}}{{else}}
+/assign_{{.Task.ID}}{{end}}
+{{end}}
+{{else}}Нет задач{{end}}`
+
+var SPECLIST = `{{if .}}
 {{range .}}{{.ID}}. {{.Name}} by @{{.Creator.Username}}{{if .Assignee.Username}}
-assignee: @{{.Assignee.Username}}{{end}}
+/unassign_{{.ID}} /resolve_{{.ID}}{{else}}
+/assign_{{.ID}}{{end}}
 {{end}}
 {{else}}Нет задач{{end}}`
 
 var TASK = `Задача "{{.Name}}" создана, id={{.ID}}`
 
-var ASSIGN = `Задача "{{.Name}}" назначена на {{if .Assignee.Username}}@{{.Assignee.Username}}{{else}}вас{{end}}`
+var ASSIGN = `Задача "{{.Task.Name}}" назначена на {{if (ne .User.Username .Task.Assignee.Username)}}@{{.Task.Assignee.Username}}{{else}}вас{{end}}`
 
-var UNASSIGN = `{{if .Creator}}{{if .Assignee.Username}}Принято{{else}}Задача "{{.Name}}" осталась без исполнителя{{end}}{{else}}Задача не на вас{{end}}`
+var UNASSIGN = `{{if .Task.Name}}{{if .User.Username}}Задача "{{.Task.Name}}" осталась без исполнителя{{else}}Принято{{end}}{{else}}Задача не на вас{{end}}`
 
-var RESOLVE = `Задача "{{.Name}}" выполнена {{if .Assignee.Username}}@{{.Assignee.Username}}{{end}}`
+var RESOLVE = `Задача "{{.Task.Name}}" выполнена {{if (ne .User.Username .Task.Assignee.Username)}}@{{.Task.Assignee.Username}}{{end}}`
 
 var patternAssign = `^/assign_\d+$`
 var patternUnassign = `^/unassign_\d+$`
@@ -96,14 +105,17 @@ func ResolveUser(t *TelegramBot, st *TaskStorage, update tgbotapi.Update, Id int
 		var tmpl = template.New("resolve")
 		tmpl, _ = tmpl.Parse(RESOLVE)
 		buf := bytes.NewBufferString("")
-		copyTask := task
-		copyTask.Assignee.Username = ""
-		tmpl.Execute(buf, copyTask)
+		answer := Answer{
+			Task: task,
+			User: currentUser,
+		}
+		tmpl.Execute(buf, answer)
 		t.bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, buf.String()))
 		buf.Reset()
 
 		if currentUser.Username != task.Creator.Username {
-			tmpl.Execute(buf, task)
+			answer.User.Username = task.Creator.Username
+			tmpl.Execute(buf, answer)
 			t.bot.Send(tgbotapi.NewMessage(task.Creator.ChatID, buf.String()))
 		}
 	}
@@ -115,14 +127,16 @@ func UnssignUser(t *TelegramBot, st *TaskStorage, update tgbotapi.Update, Id int
 	var tmpl = template.New("unassign")
 	tmpl, _ = tmpl.Parse(UNASSIGN)
 	buf := bytes.NewBufferString("")
-	copyTask := task
-	copyTask.Assignee.Username = ""
-	tmpl.Execute(buf, copyTask)
+	answer := Answer{
+		Task: task,
+	}
+	tmpl.Execute(buf, answer)
 	t.bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, buf.String()))
 	buf.Reset()
 
 	if currentUser.Username != task.Creator.Username && task != (Task{}) {
-		tmpl.Execute(buf, task)
+		answer.User.Username = task.Creator.Username
+		tmpl.Execute(buf, answer)
 		t.bot.Send(tgbotapi.NewMessage(task.Creator.ChatID, buf.String()))
 	}
 }
@@ -133,14 +147,18 @@ func AssignUser(t *TelegramBot, st *TaskStorage, update tgbotapi.Update, Id int)
 	var tmpl = template.New("assign")
 	tmpl, _ = tmpl.Parse(ASSIGN)
 	buf := bytes.NewBufferString("")
-	copyTask := task
-	copyTask.Assignee.Username = ""
-	tmpl.Execute(buf, copyTask)
+	answer := Answer{
+		Task: task,
+		User: newAssign,
+	}
+
+	tmpl.Execute(buf, answer)
 	t.bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, buf.String()))
 	buf.Reset()
 
 	if newAssign.Username != task.Creator.Username {
-		tmpl.Execute(buf, task)
+		answer.User.Username = task.Creator.Username
+		tmpl.Execute(buf, answer)
 		t.bot.Send(tgbotapi.NewMessage(task.Creator.ChatID, buf.String()))
 	}
 
@@ -162,17 +180,22 @@ func NewMessage(t *TelegramBot, st *TaskStorage, update tgbotapi.Update) {
 
 func ShowAll(t *TelegramBot, st TaskStorage, update tgbotapi.Update) {
 	dataToShow := st.Get("", "")
+	currentUser := User{ChatID: update.Message.Chat.ID, Username: update.Message.From.UserName}
+	answer := make([]Answer, len(dataToShow))
+	for i, data := range dataToShow {
+		answer[i] = Answer{Task: data, User: currentUser}
+	}
 	var tmpl = template.New("list")
 	tmpl, _ = tmpl.Parse(LIST)
 	buf := bytes.NewBufferString("")
-	tmpl.Execute(buf, dataToShow)
+	tmpl.Execute(buf, answer)
 	t.bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, buf.String()))
 }
 
 func ShowMy(t *TelegramBot, st TaskStorage, update tgbotapi.Update) {
 	dataToShow := st.Get(update.Message.From.UserName, "")
 	var tmpl = template.New("list")
-	tmpl, _ = tmpl.Parse(LIST)
+	tmpl, _ = tmpl.Parse(SPECLIST)
 	buf := bytes.NewBufferString("")
 	tmpl.Execute(buf, dataToShow)
 	t.bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, buf.String()))
@@ -181,7 +204,7 @@ func ShowMy(t *TelegramBot, st TaskStorage, update tgbotapi.Update) {
 func ShowMyCreate(t *TelegramBot, st TaskStorage, update tgbotapi.Update) {
 	dataToShow := st.Get("", update.Message.From.UserName)
 	var tmpl = template.New("list")
-	tmpl, _ = tmpl.Parse(LIST)
+	tmpl, _ = tmpl.Parse(SPECLIST)
 	buf := bytes.NewBufferString("")
 	tmpl.Execute(buf, dataToShow)
 	t.bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, buf.String()))

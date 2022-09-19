@@ -1,5 +1,7 @@
 package main
 
+import "fmt"
+
 type User struct {
 	ChatID   int64
 	Username string
@@ -51,6 +53,7 @@ func (st *TaskStorage) ModifyTask(Id int, newAssign User, oldAssign User) Task {
 		if st.Storage[i].ID == Id {
 			if oldAssign.Username == "" {
 				st.Storage[i].Assignee = newAssign
+				fmt.Println(st.Storage[i].Assignee)
 				return st.Storage[i]
 			} else if oldAssign == st.Storage[i].Assignee {
 				st.Storage[i].Assignee = User{}
