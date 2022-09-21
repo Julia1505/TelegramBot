@@ -12,18 +12,18 @@ import (
 var (
 	BotToken = "5130893085:AAFxPRK32MNUj8A1pBbvTuJMN1kYLOc5ZkM"
 
-	WebhookURL = "https://dc1f-188-255-34-137.eu.ngrok.io"
+	WebhookURL = "https://1a34-188-255-34-137.eu.ngrok.io"
 )
 
 type TelegramBot struct {
 	bot *tgbotapi.BotAPI
 }
 
-func startTaskBot(ctx context.Context) (*TelegramBot, error) {
+func startTaskBot(ctx context.Context) error {
 	bot, err := tgbotapi.NewBotAPI(BotToken)
 	if err != nil {
 		log.Fatalf("NewBotApi failed: %s", err)
-		return nil, err
+		return err
 	}
 
 	fmt.Printf("Authorized on account %s\n", bot.Self.UserName)
@@ -38,15 +38,8 @@ func startTaskBot(ctx context.Context) (*TelegramBot, error) {
 		log.Fatalf("SetWebhook failed: %s", err)
 	}
 
-	return &TelegramBot{
-			bot: bot,
-		},
-		nil
-}
-
-func (t *TelegramBot) Run(debug bool) error {
-	t.bot.Debug = debug
-	updates := t.bot.ListenForWebhook("/")
+	bot.Debug = true
+	updates := bot.ListenForWebhook("/")
 
 	http.HandleFunc("/state", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("all is working"))
@@ -63,22 +56,33 @@ func (t *TelegramBot) Run(debug bool) error {
 
 	storage := CreateTaskCollection()
 
-	for update := range updates {
-		log.Printf("upd: %#v\n", update)
-
-		t.HandleUpdates(storage, update)
-		//mes := update.Message.Text
-		//t.bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Купи слона "+mes+update.Message.From.UserName))
+	t := &TelegramBot{
+		bot: bot,
 	}
 
-	return nil
+	for {
+		select {
+		case update := <-updates:
+			log.Printf("upd: %#v\n", update)
+
+			t.HandleUpdates(storage, update)
+		case <-ctx.Done():
+			return nil
+		}
+
+	}
+
 }
 
 func main() {
-	bot, err := startTaskBot(context.Background())
-	bot.Run(true)
+	ctx, cancel := context.WithCancel(context.Background())
 
+	err := startTaskBot(ctx)
 	if err != nil {
-		panic(err)
+		//nolint:govet
+		fmt.Printf("startTaskBot error: %s", err)
 	}
+
+	defer cancel()
+
 }

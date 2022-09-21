@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"regexp"
 	"strconv"
@@ -57,7 +56,7 @@ func (t *TelegramBot) HandleUpdates(st *TaskStorage, update tgbotapi.Update) {
 	if message := update.Message.Text; message != "" {
 		parseMessage := strings.SplitN(message, " ", 2)
 
-		fmt.Println(parseMessage[0])
+		//fmt.Println(parseMessage[0])
 		switch parseMessage[0] {
 		case "hello":
 			fallthrough
@@ -74,7 +73,7 @@ func (t *TelegramBot) HandleUpdates(st *TaskStorage, update tgbotapi.Update) {
 		case "/owner":
 			ShowMyCreate(t, *st, update)
 		default:
-			fmt.Println(parseMessage[0])
+			//fmt.Println(parseMessage[0])
 			if is, _ := regexp.MatchString(patternAssign, parseMessage[0]); is {
 				re, _ := regexp.Compile(`\d+`)
 				taskId, _ := strconv.Atoi(re.FindAllString(parseMessage[0], 1)[0])
@@ -167,9 +166,9 @@ func AssignUser(t *TelegramBot, st *TaskStorage, update tgbotapi.Update, Id int)
 func NewMessage(t *TelegramBot, st *TaskStorage, update tgbotapi.Update) {
 	name := strings.Trim(update.Message.Text, "/new ")
 	newTask := Task{Name: name, Creator: User{ChatID: update.Message.Chat.ID, Username: update.Message.From.UserName}}
-	fmt.Println(newTask)
+	//fmt.Println(newTask)
 	st.AddTask(&newTask)
-	fmt.Println(newTask)
+	//fmt.Println(newTask)
 
 	var tmpl = template.New("new")
 	tmpl, _ = tmpl.Parse(TASK)
