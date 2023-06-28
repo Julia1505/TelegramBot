@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"regexp"
 	"strconv"
@@ -73,7 +74,7 @@ func (t *TelegramBot) HandleUpdates(st *TaskStorage, update tgbotapi.Update) {
 		case "/owner":
 			ShowMyCreate(t, *st, update)
 		default:
-			//fmt.Println(parseMessage[0])
+			fmt.Println(parseMessage[0])
 			if is, _ := regexp.MatchString(patternAssign, parseMessage[0]); is {
 				re, _ := regexp.Compile(`\d+`)
 				taskId, _ := strconv.Atoi(re.FindAllString(parseMessage[0], 1)[0])
